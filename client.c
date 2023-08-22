@@ -5,11 +5,26 @@
 #include<unistd.h>
 #include<arpa/inet.h>
 #include<sys/socket.h>
+#include<pthread.h>
 
 #define IPADDRESS "127.0.0.1"
 #define PORT 8989
-#define BUFFSIZE 102
+#define BUFFSIZE 1024
 
+/* write to the socket using thread */
+void *writeToSock(void* sockfd) {
+    char buff[BUFFSIZE];
+
+    while(1) {
+    uint8_t n = 0;
+        while((n < BUFFSIZE) && ((buff[n++] = getchar()) != '\n')) 
+            ;
+        write(*(int*)sockfd, buff, sizeof(buff));
+    }
+    return NULL;
+}
+
+/* trim the read bytes */
 void sanitize(char* buff, int readbytes) {
     while(readbytes-- > 0) {
         if(isspace(buff[readbytes])) {
@@ -20,6 +35,7 @@ void sanitize(char* buff, int readbytes) {
     }
 }
 
+/* read the socket */
 void communicate(int sockfd) {
     char buff[BUFFSIZE];
     while(1){
@@ -38,6 +54,7 @@ int main (int argc, char const* argv[]) {
 
     int sockfd;
     struct sockaddr_in servaddr;
+    pthread_t thread_id;
 
     /* create socket with IPv4, TCP */
     sockfd = socket(AF_INET, SOCK_STREAM , 0);
@@ -59,8 +76,20 @@ int main (int argc, char const* argv[]) {
         }
     }
 
+    if(pthread_create(&thread_id, NULL, writeToSock, &sockfd) != 0) {
+        perror("error in creating thread\n");
+        exit(1);
+    }
+
     /* function for read write */
     communicate(sockfd);
+    
+    /* thread join */
+    if(pthread_join(thread_id, NULL) != 0) {
+        perror("pthread error\n");
+        exit(3);
+    }
+
     /* close the socket*/
     close(sockfd);
 
